@@ -51,7 +51,7 @@ $$
 $$
 首先需要计算出该方程的精确解，来为后续的误差图做准备。这里以$\Delta t,\Delta x$为时空间隔，将时空域网格化，记$x_0=-1,\cdots,x_j=j\Delta x -1,\cdots,x_{N_x}=1$,$t_0=0,\cdots,t_j=j\Delta t,\cdots,t_{N_t}=1$,其中$N_{x}=2/\Delta x$,$N_{t}=1/\Delta t$.这样就得到了如下时空网格:
 
-![mesh](fig\mesh.png)
+![mesh](mesh.png)
 
 先将方程离散化，这里对$u_t$向前差分，再对$u_{xx}$做中心二阶差分，$u$​​选取当前时间层，得：
 $$
