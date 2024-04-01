@@ -85,18 +85,31 @@ def test():
             # 计算损失并反向传播
             loss = pinn_mini.train()
 
-            # 自动保存最优模型
-            if loss < min_loss:
-                min_loss = loss
-                min_loss_epochs = epochs + 1
-                min_loss_batch = idx + 1
-                # 保存模型
-                pinn_mini.save()
-                # print('When epochs:{}/{},batch:{}/{},found min Loss:{}'.format(epochs + 1,total_epochs,idx + 1,ceil(len(point_mini)/batch_size),loss))
+    #         # 自动保存最优模型
+    #         if loss < min_loss:
+    #             min_loss = loss
+    #             min_loss_epochs = epochs + 1
+    #             min_loss_batch = idx + 1
+    #             # 保存模型
+    #             pinn_mini.save()
+    #             # print('When epochs:{}/{},batch:{}/{},found min Loss:{}'.format(epochs + 1,total_epochs,idx + 1,ceil(len(point_mini)/batch_size),loss))
             if (idx + 1) % 100 == 0: # 每100个batch输出一次
                 print('epochs:{}/{},batch:{}/{},Loss:{}'.format(epochs + 1,total_epochs,idx + 1,ceil(len(point_mini)/batch_size),loss))
-    print('IN EPOCHS:{},BATCH:{},SAVED BEST MODEL. (LOSS:{})'.format(min_loss_epochs,min_loss_batch,min_loss))
+            if idx + 1 == batch_size & len(pinn_mini.Epochs_loss) > 0:
+                pinn_mini.Epochs_loss.append([pinn_mini.Epochs_loss[-1][0] + 1, loss])
+            else:
+                pinn_mini.Epochs_loss.append([1, loss])
+    # print('IN EPOCHS:{},BATCH:{},SAVED BEST MODEL. (LOSS:{})'.format(min_loss_epochs,min_loss_batch,min_loss))
 
+    # 初始化L-BFGS优化器
+    pinn_mini.opt = torch.optim.LBFGS(pinn_mini.model.parameters(), history_size=100, tolerance_change=0, tolerance_grad=1e-08, max_iter=25000, max_eval=30000)
+    num_epochs_lbfgs = 1
+    print('now using L_BFGS...')
+    for epoch in range(num_epochs_lbfgs):
+        pinn_mini.opt.step(pinn_mini.closure)  # 更新权重,注意不要加括号!因为传递的是函数本身而不是函数的返回值！
+        # print('epoch:',epoch + 1)
+        # print('loss:',loss)
+    pinn_mini.save()
 
     # 加载并测试
     draw(pinn_mini,'save/mini.pth',u,device)
@@ -123,6 +136,7 @@ def draw(pinn, load_path,u, device):
     pinn.model.load_state_dict(checkpoint['model'])
     pinn.opt.load_state_dict(checkpoint['opt'])
     pinn.Epochs_loss = checkpoint['loss']
+    pinn.Epochs_loss = np.array(pinn.Epochs_loss)
     pinn.model.eval()  # 启用评估模式
     with torch.no_grad():
         x = torch.arange(-1, 1.002, 0.002, device=device)  # 不包含最后一项
@@ -158,11 +172,11 @@ def draw(pinn, load_path,u, device):
         plt.xlabel("t")
         plt.ylabel("x")
 
-        # plt.figure()
-        # plt.plot(pinn.Epochs_loss[:, 0], pinn.Epochs_loss[:, 1])
-        # plt.xlabel('epochs')
-        # plt.ylabel('loss')
-        # plt.title('losses with epochs')
+        plt.figure()
+        plt.semilogy(pinn.Epochs_loss[:, 0], pinn.Epochs_loss[:, 1])
+        plt.xlabel('epochs')
+        plt.ylabel('loss')
+        plt.title('losses with epochs')
 
 if __name__ == '__main__':
     test()

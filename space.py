@@ -22,7 +22,7 @@ from NN.ResFNN import ResFNN
 def test():
     # 初始化
     seed = 0
-    Arc = [2,128,128,128,128,1] # 神经网络架构
+    Arc = [2,30,30,30,30,30,30,30,30,1] # 神经网络架构
     func = nn.Tanh() # 确定激活函数
     N_pde = 2000
     N_bound = 100
@@ -31,8 +31,8 @@ def test():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # 自动选择可用设备,优先GPU
     learning_rate = 0.001
     init_method = torch.nn.init.kaiming_uniform_ # 设置神经网络参数初始化方法
-    # total_epochs = 400 # 运用Adam优化的次数
-    total_space = 100 # 空间采样次数
+    total_epochs = 3000 # 运用Adam优化的次数
+    total_space = 50 # 空间采样次数
     tor = 0.0001 # loss阈值
     loss_func = nn.MSELoss().to(device) # 确定损失计算函数
     loss_weight = [1,1,100,0] # loss各项权重(pde,bound,ini,real)
@@ -47,14 +47,14 @@ def test():
     mesh_x = grid_x.reshape(-1, 1)
     mesh_t = grid_t.reshape(-1, 1)
 
-    num = 50
+    num = 200
 
     # 建立模型
     set_seed(seed)  # 设置确定的随机种子
 
     space = FNN(Arc, func, device)
 
-    opt_space = torch.optim.LBFGS(space.model.parameters(), lr=0.01, max_iter=20, line_search_fn='strong_wolfe')
+    opt_space = torch.optim.Adam(params=space.parameters(), lr=learning_rate)
 
     point_space = create_point(N_pde, N_bound, N_ini, N_real, device)
 
@@ -64,37 +64,39 @@ def test():
 
     # 训练模型
     for space_epochs in range(total_space):
-        # for epochs in range(total_epochs):
-        #     # 计算损失并反向传播
-        #     pinn_space.model.train()
-        #     pinn_space.opt = torch.optim.Adam(params=space.parameters(), lr=learning_rate)
-        #     pinn_space.opt.zero_grad()  # 清零梯度信息
-        #     Loss = pinn_space.loss_computer.loss()
-        #     if (epochs + 1) % 100 == 0:
-        #         print('space_epoch:{}/{},epoch:{}/{},loss:{}'.format(space_epochs + 1,total_space,epochs + 1,total_epochs,Loss.item()))
-        #     Loss.backward(retain_graph=True)  # 反向计算出梯度
-        #     pinn_space.opt.step()  # 更新参数
-        #
+        for epochs in range(total_epochs):
+            # 计算损失并反向传播
+            pinn_space.model.train()
+            pinn_space.opt.zero_grad()  # 清零梯度信息
+            Loss = pinn_space.loss_computer.loss()
+            if len(pinn_space.Epochs_loss) > 0:
+                pinn_space.Epochs_loss.append([pinn_space.Epochs_loss[-1][0] + 1, Loss.item()])
+            else:
+                pinn_space.Epochs_loss.append([1, Loss.item()])
+            if (epochs + 1) % 1000 == 0:
+                print('space_epoch:{}/{},epoch:{}/{},loss:{}'.format(space_epochs + 1,total_space,epochs + 1,total_epochs,Loss.item()))
+            Loss.backward(retain_graph=True)  # 反向计算出梯度
+            pinn_space.opt.step()  # 更新参数
+
         # opt_save = pinn_space.opt
 
-        num_epochs_lbfgs = 100
-        # print('now using L_BFGS...')
-        for epochs_lbfgs in range(num_epochs_lbfgs):
-            loss = pinn_space.opt.step(pinn_space.closure)  # 更新权重,注意不要加括号!因为传递的是函数本身而不是函数的返回值！
-            # 自动保存最优模型
-            if loss < min_loss:
-                min_loss = loss
-                # min_loss_epochs = epochs + 1
-                min_space_epochs = space_epochs + 1
-                # 保存模型
-                pinn_space.save()
-                print('When space_epochs:{}/{},epochs_lbfgs:{}/{},found min Loss:{}'.format(space_epochs + 1,total_space,epochs_lbfgs + 1, num_epochs_lbfgs, loss))
-
-            if (epochs_lbfgs + 1) % 25 == 0:
-                print('space_epoch:{},epochs_lbfgs:{}'.format(space_epochs + 1,epochs_lbfgs + 1))
-                print('loss:', loss)
+        # num_epochs_lbfgs = 100
+        # # print('now using L_BFGS...')
+        # for epochs_lbfgs in range(num_epochs_lbfgs):
+        #     loss = pinn_space.opt.step(pinn_space.closure)  # 更新权重,注意不要加括号!因为传递的是函数本身而不是函数的返回值！
+        #     # 自动保存最优模型
+        #     if loss < min_loss:
+        #         min_loss = loss
+        #         # min_loss_epochs = epochs + 1
+        #         min_space_epochs = space_epochs + 1
+        #         # 保存模型
+        #         pinn_space.save()
+        #         print('When space_epochs:{}/{},epochs_lbfgs:{}/{},found min Loss:{}'.format(space_epochs + 1,total_space,epochs_lbfgs + 1, num_epochs_lbfgs, loss))
+        #
+        #     if (epochs_lbfgs + 1) % 25 == 0:
+        #         print('space_epoch:{},epochs_lbfgs:{}'.format(space_epochs + 1,epochs_lbfgs + 1))
+        #         print('loss:', loss)
         # pinn_space.opt = opt_save
-
 
         pinn_space.model.eval()
         # 计算pde损失
@@ -103,7 +105,7 @@ def test():
         flat_indices = flat_indices.reshape(-1, 1)
 
         # 将这些一维索引转换为二维索引，对应原始矩阵中的位置
-        rows = flat_indices // pde_err.shape[0]
+        rows = flat_indices // pde_err.shape[1]
         cols = flat_indices % pde_err.shape[1]
         err_x = x[rows]
         err_t = t[cols]
@@ -111,9 +113,21 @@ def test():
         pinn_space.point.pde_t = torch.cat([pinn_space.point.pde_t,err_t],dim=0)
         # print('ADDED {} POINT.'.format(num))
 
-    print('IN SPACE_EPOCHS:{},SAVED BEST MODEL. (LOSS:{})'.format(space_epochs + 1,min_loss))
+    # print('IN SPACE_EPOCHS:{},SAVED BEST MODEL. (LOSS:{})'.format(space_epochs + 1,min_loss))
     # 保存模型
     # pinn_space.save()
+
+    # 初始化L-BFGS优化器
+    pinn_space.opt = torch.optim.LBFGS(pinn_space.model.parameters(), history_size=100, tolerance_change=0,tolerance_grad=1e-08, max_iter=15000, max_eval=20000)
+    num_epochs_lbfgs = 1
+    print('now using L_BFGS...')
+    for epoch in range(num_epochs_lbfgs):
+        loss = pinn_space.opt.step(pinn_space.closure)  # 更新权重,注意不要加括号!因为传递的是函数本身而不是函数的返回值！
+        # pinn_base.Epochs_loss.append([total_epochs + epoch + 1, Loss.item()])
+        # print('epoch:',epoch)
+        # print('loss:',loss)
+    # pinn_base.Epochs_loss = np.array(pinn_base.Epochs_loss)
+    pinn_space.save()
 
     # 加载并测试
     draw(pinn_space,'save/space.pth',u,device)
@@ -140,6 +154,7 @@ def draw(pinn, load_path,u, device):
     pinn.model.load_state_dict(checkpoint['model'])
     pinn.opt.load_state_dict(checkpoint['opt'])
     pinn.Epochs_loss = checkpoint['loss']
+    pinn.Epochs_loss = np.array(pinn.Epochs_loss)
     pinn.model.eval()  # 启用评估模式
     with torch.no_grad():
         x = torch.arange(-1, 1.002, 0.002, device=device)  # 不包含最后一项
@@ -175,11 +190,11 @@ def draw(pinn, load_path,u, device):
         plt.xlabel("t")
         plt.ylabel("x")
 
-        # plt.figure()
-        # plt.plot(pinn.Epochs_loss[:, 0], pinn.Epochs_loss[:, 1])
-        # plt.xlabel('epochs')
-        # plt.ylabel('loss')
-        # plt.title('losses with epochs')
+        plt.figure()
+        plt.semilogy(pinn.Epochs_loss[:, 0], pinn.Epochs_loss[:, 1])
+        plt.xlabel('epochs')
+        plt.ylabel('loss')
+        plt.title('losses with epochs')
 
 # 计算求导
 def gradient(func,var,order = 1):
@@ -194,7 +209,7 @@ def loss_pde(pinn,x,t):
     u = pinn.model(torch.cat([x, t], dim=1))
     u_t = gradient(u, t)
     u_xx = gradient(u, x, 2)
-    return u_t - 0.0001 * u_xx + 5 * (u ** 3) - 5 * u
+    return torch.abs(u_t - 0.0001 * u_xx + 5 * (u ** 3) - 5 * u)
 
 if __name__ == '__main__':
     test()

@@ -49,6 +49,8 @@ class pinn(object):
     def closure(self):
         self.opt.zero_grad()  # 清零梯度
         Loss = self.loss_computer.loss()  # 计算损失
+        self.Epochs_loss.append([self.Epochs_loss[-1][0] + 1, Loss.item()])
+        print('loss:', Loss.item())
         Loss.backward(retain_graph=True) # 反向计算出梯度
         return Loss.item()
 
@@ -70,10 +72,10 @@ class pinn(object):
                 print('epoch:',epoch + 1,'Loss=',Loss.cpu().detach().numpy())
             if Loss <= self.tor:
                 print('epoch:', epoch + 1,'loss_func =',Loss.cpu().detach().numpy(), '<=', self.tor, '(given tolerate loss_func)')
-                self.Epochs_loss = np.array(self.Epochs_loss)
+                # self.Epochs_loss = np.array(self.Epochs_loss)
                 break
         end_time =time.time()
-        self.Epochs_loss = np.array(self.Epochs_loss)
+        # self.Epochs_loss = np.array(self.Epochs_loss)
         print('training terminated')
         print('using times:',end_time-start_time,'s')
 

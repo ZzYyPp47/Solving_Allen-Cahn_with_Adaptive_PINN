@@ -31,7 +31,7 @@ def test():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # 自动选择可用设备,优先GPU
     learning_rate = 0.001
     init_method = torch.nn.init.kaiming_uniform_ # 设置神经网络参数初始化方法
-    total_epochs = 10000
+    total_epochs = 40000
     tor = 0.0001 # loss阈值
     loss_func = nn.MSELoss().to(device) # 确定损失计算函数
     loss_weight = [1,1,100,0] # loss各项权重(pde,bound,ini,real)
@@ -50,13 +50,13 @@ def test():
 
     pinn_weighted.train_all()
     # 初始化L-BFGS优化器
-    pinn_weighted.opt = torch.optim.LBFGS(pinn_weighted.model.parameters(), lr=0.01, max_iter=20, line_search_fn='strong_wolfe')
-    num_epochs_lbfgs = 100
+    pinn_weighted.opt = torch.optim.LBFGS(pinn_weighted.model.parameters(), history_size=100, tolerance_change=0, tolerance_grad=1e-08, max_iter=40000, max_eval=50000)
+    num_epochs_lbfgs = 1
     print('now using L_BFGS...')
     for epoch in range(num_epochs_lbfgs):
-        loss = pinn_weighted.opt.step(pinn_weighted.closure)  # 更新权重,注意不要加括号!因为传递的是函数本身而不是函数的返回值！
-        print('epoch:',epoch + 1)
-        print('loss:',loss)
+        pinn_weighted.opt.step(pinn_weighted.closure)  # 更新权重,注意不要加括号!因为传递的是函数本身而不是函数的返回值！
+        # print('epoch:',epoch + 1)
+        # print('loss:',loss)
     pinn_weighted.save()
 
     # 加载并测试
@@ -84,6 +84,7 @@ def draw(pinn, load_path, device):
     pinn.model.load_state_dict(checkpoint['model'])
     pinn.opt.load_state_dict(checkpoint['opt'])
     pinn.Epochs_loss = checkpoint['loss']
+    pinn.Epochs_loss = np.array(pinn.Epochs_loss)
     pinn.model.eval()  # 启用评估模式
     with torch.no_grad():
         x = torch.arange(-1, 1.002, 0.002, device=device)  # 不包含最后一项
@@ -122,11 +123,11 @@ def draw(pinn, load_path, device):
         plt.xlabel("t")
         plt.ylabel("x")
 
-        # plt.figure()
-        # plt.plot(pinn.Epochs_loss[:, 0], pinn.Epochs_loss[:, 1])
-        # plt.xlabel('epochs')
-        # plt.ylabel('loss')
-        # plt.title('losses with epochs')
+        plt.figure()
+        plt.semilogy(pinn.Epochs_loss[:, 0], pinn.Epochs_loss[:, 1])
+        plt.xlabel('epochs')
+        plt.ylabel('loss')
+        plt.title('losses with epochs')
 
 
 
